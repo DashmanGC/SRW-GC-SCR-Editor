@@ -12,6 +12,7 @@
   </Properties>
   <SyntheticProperties>
     <SyntheticProperty name="formSizePolicy" type="int" value="1"/>
+    <SyntheticProperty name="generateCenter" type="boolean" value="false"/>
   </SyntheticProperties>
   <AuxValues>
     <AuxValue name="FormSettings_autoResourcing" type="java.lang.Integer" value="0"/>
@@ -48,7 +49,7 @@
                   <Group type="102" alignment="0" attributes="0">
                       <Component id="panelPalettes" min="-2" max="-2" attributes="0"/>
                       <EmptySpace max="-2" attributes="0"/>
-                      <Component id="panelSCRedit" min="0" pref="308" max="32767" attributes="0"/>
+                      <Component id="panelSCRedit" min="0" pref="0" max="32767" attributes="0"/>
                   </Group>
                   <Component id="panelImageData" alignment="0" min="-2" max="-2" attributes="0"/>
               </Group>
@@ -112,7 +113,7 @@
                       <Component id="buttonLoadBM9" alignment="3" min="-2" max="-2" attributes="0"/>
                   </Group>
                   <EmptySpace max="-2" attributes="0"/>
-                  <Component id="scrollImage" pref="429" max="32767" attributes="0"/>
+                  <Component id="scrollImage" max="32767" attributes="0"/>
                   <EmptySpace max="-2" attributes="0"/>
                   <Group type="103" groupAlignment="3" attributes="0">
                       <Component id="radioPickIndividualTile" alignment="3" min="-2" max="-2" attributes="0"/>
@@ -371,7 +372,7 @@
                       <Component id="scrollSCR" alignment="0" min="-2" pref="341" max="-2" attributes="0"/>
                       <Group type="102" alignment="0" attributes="0">
                           <Component id="labelSCRfile" min="-2" pref="113" max="-2" attributes="0"/>
-                          <EmptySpace pref="106" max="32767" attributes="0"/>
+                          <EmptySpace max="32767" attributes="0"/>
                           <Component id="labelZoomSCR" min="-2" pref="62" max="-2" attributes="0"/>
                           <EmptySpace type="unrelated" max="-2" attributes="0"/>
                           <Component id="comboZoomSCR" min="-2" pref="50" max="-2" attributes="0"/>
@@ -392,9 +393,9 @@
                               <Group type="102" attributes="0">
                                   <Component id="textfieldHeight" min="-2" pref="50" max="-2" attributes="0"/>
                                   <EmptySpace type="separate" max="-2" attributes="0"/>
-                                  <Component id="buttonResize" pref="103" max="32767" attributes="0"/>
+                                  <Component id="buttonResize" max="32767" attributes="0"/>
                               </Group>
-                              <Component id="checkFlipV" pref="171" max="32767" attributes="0"/>
+                              <Component id="checkFlipV" max="32767" attributes="0"/>
                           </Group>
                       </Group>
                   </Group>
