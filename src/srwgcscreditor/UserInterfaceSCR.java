@@ -1806,6 +1806,9 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         
         try {
             RandomAccessFile scr = new RandomAccessFile(path, "rw");
+            
+            // Truncate the file (in case we're overwriting)
+            scr.setLength(0);
 
             scr.write(header);
             scr.write(data);
@@ -2126,6 +2129,9 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         try {
             //RandomAccessFile bmp = new RandomAccessFile(path, "rw");
             RandomAccessFile bmp = new RandomAccessFile(filename, "rw");
+            
+            // Truncate the file (in case we're overwriting)
+            bmp.setLength(0);
 
             bmp.write(header);
             bmp.write(CLUT);
