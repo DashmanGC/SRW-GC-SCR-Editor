@@ -37,6 +37,7 @@ public class TilePanel extends javax.swing.JPanel {
     private BufferedImage image = new BufferedImage(8, 8, BufferedImage.TYPE_BYTE_INDEXED);
     private int zoom = 1;
     private boolean selected = false;
+    private boolean highlighted = false;
     private boolean flipH = false;
     private boolean flipV = false;
     private int position = 0;
@@ -114,6 +115,22 @@ public class TilePanel extends javax.swing.JPanel {
             this.setBorder( BorderFactory.createLineBorder(Color.GREEN, 1 * zoom) );
         else
             this.setBorder( BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1 * zoom) );
+
+        this.repaint();
+    }
+    
+    
+    public void setHighlighted(boolean hig){
+        highlighted = hig;
+        
+        if (selected)
+            this.setBorder( BorderFactory.createLineBorder(Color.GREEN, 1 * zoom) );
+        else{
+            if (highlighted)
+                this.setBorder( BorderFactory.createLineBorder(Color.ORANGE, 1 * zoom) );
+            else
+                this.setBorder( BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1 * zoom) );
+        }
 
         this.repaint();
     }

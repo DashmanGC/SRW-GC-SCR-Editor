@@ -31,11 +31,14 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.image.IndexColorModel;
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import javax.swing.ComboBoxModel;
+import javax.swing.DefaultComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.ImageIcon;
 import javax.swing.JFileChooser;
@@ -51,14 +54,51 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
     String lastDirectory = ".";
     String lastDirectorySave = ".";
-    ArrayList<IndexColorModel> palettes;
+    ArrayList<IndexColorModel> palettes;        // Originals - can restore to these
+    ArrayList<IndexColorModel> palettes_mod;    // with modifications
     int lastPalette = -1;
     boolean image_loaded = false;
     boolean scr_loaded = false;
     String title = "SRW GC SCR Editor by Dashman";
+    
+    String[] color16 = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                         "10", "11", "12", "13", "14", "15"};
+    
+    String[] color256 = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+                         "10", "11", "12", "13", "14", "15", "16", "17", "18", "19",
+                         "20", "21", "22", "23", "24", "25", "26", "27", "28", "29",
+                         "30", "31", "32", "33", "34", "35", "36", "37", "38", "39",
+                         "40", "41", "42", "43", "44", "45", "46", "47", "48", "49",
+                         "50", "51", "52", "53", "54", "55", "56", "57", "58", "59",
+                         "60", "61", "62", "63", "64", "65", "66", "67", "68", "69",
+                         "70", "71", "72", "73", "74", "75", "76", "77", "78", "79",
+                         "80", "81", "82", "83", "84", "85", "86", "87", "88", "89",
+                         "90", "91", "92", "93", "94", "95", "96", "97", "98", "99",
+                         "100", "101", "102", "103", "104", "105", "106", "107", "108", "109",
+                         "110", "111", "112", "113", "114", "115", "116", "117", "118", "119",
+                         "120", "121", "122", "123", "124", "125", "126", "127", "128", "129",
+                         "130", "131", "132", "133", "134", "135", "136", "137", "138", "139",
+                         "140", "141", "142", "143", "144", "145", "146", "147", "148", "149",
+                         "150", "151", "152", "153", "154", "155", "156", "157", "158", "159",
+                         "160", "161", "162", "163", "164", "165", "166", "167", "168", "169",
+                         "170", "171", "172", "173", "174", "175", "176", "177", "178", "179",
+                         "180", "181", "182", "183", "184", "185", "186", "187", "188", "189",
+                         "190", "191", "192", "193", "194", "195", "196", "197", "198", "199",
+                         "200", "201", "202", "203", "204", "205", "206", "207", "208", "209",
+                         "210", "211", "212", "213", "214", "215", "216", "217", "218", "219",
+                         "220", "221", "222", "223", "224", "225", "226", "227", "228", "229",
+                         "230", "231", "232", "233", "234", "235", "236", "237", "238", "239",
+                         "240", "241", "242", "243", "244", "245", "246", "247", "248", "249",
+                         "250", "251", "252", "253", "254", "255"};
 
     // We use this to manage the contents of the palette list
     DefaultListModel modelListPal = new DefaultListModel();
+        
+    // Variables used for Mass BMP exports
+    boolean palette_after = true;   // Indicates if the palette is before or after the BM file
+    String lastPaletteFound = "";   // Name of the last palette found
+                                    // This is useful to start looking for SCR files after it
+                                    // when the palette is after the BM file
 
     // We save the image data as byte arrays
     byte[][][] tilesBMfile;
@@ -70,6 +110,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     int selectedSCR = 0;
     int lastX = -1;
     int lastY = -1;
+    
+    int[] highlights;
 
     boolean flipsAllowed = false;
 
@@ -222,6 +264,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 lastSCRclicked = (TilePanel) panelTilesSCR.getComponent(selectedSCR);
                 lastSCRclicked.setSelected(true);
             }
+            
+            highlightTiles();
 
         }
     };
@@ -267,7 +311,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         listPalettes.setModel(modelListPal);
 
         initPalettes();
-        changePalette();
+        selectPalette();
 
     }
 
@@ -291,6 +335,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         radioPickIndividualTile = new javax.swing.JRadioButton();
         radioPickTileGroup = new javax.swing.JRadioButton();
         buttonLoadBM9 = new javax.swing.JButton();
+        checkTransparencyBM = new javax.swing.JCheckBox();
+        labelDimensions = new javax.swing.JLabel();
         panelPalettes = new javax.swing.JPanel();
         panelColours = new javax.swing.JPanel();
         scrollPalettes = new javax.swing.JScrollPane();
@@ -299,6 +345,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         buttonImportBM7 = new javax.swing.JButton();
         checkClearOnLoad = new javax.swing.JCheckBox();
         buttonImportBM10 = new javax.swing.JButton();
+        buttonExportPalette = new javax.swing.JButton();
+        checkXOpaddingPalette = new javax.swing.JCheckBox();
         panelSCRedit = new javax.swing.JPanel();
         labelSCRfile = new javax.swing.JLabel();
         scrollSCR = new javax.swing.JScrollPane();
@@ -316,12 +364,37 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         buttonSaveSCR = new javax.swing.JButton();
         buttonClear = new javax.swing.JButton();
         buttonSCRtoBMP = new javax.swing.JButton();
+        checkTransparencySCR = new javax.swing.JCheckBox();
+        checkXOpaddingSCR = new javax.swing.JCheckBox();
+        textfieldAlign = new javax.swing.JTextField();
+        labelAlign = new javax.swing.JLabel();
+        panelEditPalette = new javax.swing.JPanel();
+        comboColor = new javax.swing.JComboBox<>();
+        labelColorNmbr = new javax.swing.JLabel();
+        fieldColorR = new javax.swing.JTextField();
+        labelColorR = new javax.swing.JLabel();
+        fieldColorG = new javax.swing.JTextField();
+        labelColorG = new javax.swing.JLabel();
+        fieldColorB = new javax.swing.JTextField();
+        labelColorB = new javax.swing.JLabel();
+        fieldColorA = new javax.swing.JTextField();
+        labelColorA = new javax.swing.JLabel();
+        buttonRestoreColor = new javax.swing.JButton();
+        buttonRestoreAllColors = new javax.swing.JButton();
+        menubarMain = new javax.swing.JMenuBar();
+        menuBatch = new javax.swing.JMenu();
+        menuitemBM6FolderToBMP = new javax.swing.JMenuItem();
+        menuitemBM9FolderToBMP = new javax.swing.JMenuItem();
+        jSeparator1 = new javax.swing.JPopupMenu.Separator();
+        menuItemSCRFolderToBMP = new javax.swing.JMenuItem();
+        jSeparator2 = new javax.swing.JPopupMenu.Separator();
+        checkmenuAllPalettes = new javax.swing.JCheckBoxMenuItem();
 
         setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
         setTitle("SRW GC SCR Editor by Dashman");
         setResizable(false);
 
-        panelImageData.setBorder(javax.swing.BorderFactory.createTitledBorder("Image data"));
+        panelImageData.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "Image Data", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Segoe UI", 0, 12), new java.awt.Color(51, 51, 255))); // NOI18N
 
         buttonLoad.setText("Load BM6");
         buttonLoad.addActionListener(new java.awt.event.ActionListener() {
@@ -345,7 +418,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        labelZoomImage.setFont(new java.awt.Font("Tahoma", 1, 11));
+        labelZoomImage.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         labelZoomImage.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         labelZoomImage.setText("Zoom");
 
@@ -355,17 +428,17 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         panelTilesIMG.setLayout(panelTilesIMGLayout);
         panelTilesIMGLayout.setHorizontalGroup(
             panelTilesIMGLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 500, Short.MAX_VALUE)
+            .addGap(0, 531, Short.MAX_VALUE)
         );
         panelTilesIMGLayout.setVerticalGroup(
             panelTilesIMGLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 427, Short.MAX_VALUE)
+            .addGap(0, 482, Short.MAX_VALUE)
         );
 
         scrollImage.setViewportView(panelTilesIMG);
 
         buttonGroupTiles.add(radioPickIndividualTile);
-        radioPickIndividualTile.setFont(new java.awt.Font("Tahoma", 1, 11));
+        radioPickIndividualTile.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         radioPickIndividualTile.setSelected(true);
         radioPickIndividualTile.setText("Pick tiles individually");
         radioPickIndividualTile.addActionListener(new java.awt.event.ActionListener() {
@@ -375,7 +448,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         });
 
         buttonGroupTiles.add(radioPickTileGroup);
-        radioPickTileGroup.setFont(new java.awt.Font("Tahoma", 1, 11));
+        radioPickTileGroup.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         radioPickTileGroup.setText("Pick range of tiles");
 
         buttonLoadBM9.setText("Load BM9");
@@ -384,6 +457,14 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 buttonLoadBM9ActionPerformed(evt);
             }
         });
+
+        checkTransparencyBM.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
+        checkTransparencyBM.setSelected(true);
+        checkTransparencyBM.setText("Alt. transparency");
+        checkTransparencyBM.setEnabled(false);
+
+        labelDimensions.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
+        labelDimensions.setText("Dimensions (in tiles): 0 x 0");
 
         javax.swing.GroupLayout panelImageDataLayout = new javax.swing.GroupLayout(panelImageData);
         panelImageData.setLayout(panelImageDataLayout);
@@ -399,31 +480,39 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                     .addGroup(panelImageDataLayout.createSequentialGroup()
                         .addContainerGap()
                         .addGroup(panelImageDataLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(scrollImage, javax.swing.GroupLayout.DEFAULT_SIZE, 500, Short.MAX_VALUE)
+                            .addComponent(scrollImage, javax.swing.GroupLayout.PREFERRED_SIZE, 533, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addGroup(panelImageDataLayout.createSequentialGroup()
                                 .addComponent(buttonLoad, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addGap(18, 18, 18)
                                 .addComponent(buttonLoadBM9, javax.swing.GroupLayout.PREFERRED_SIZE, 80, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addGap(18, 18, 18)
                                 .addComponent(buttonSaveBMP, javax.swing.GroupLayout.PREFERRED_SIZE, 95, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addGap(85, 85, 85)
-                                .addComponent(labelZoomImage, javax.swing.GroupLayout.PREFERRED_SIZE, 62, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addComponent(comboZoomImage, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)))))
+                                .addComponent(checkTransparencyBM)
+                                .addGap(4, 4, 4)
+                                .addComponent(labelZoomImage, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(comboZoomImage, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                    .addGroup(panelImageDataLayout.createSequentialGroup()
+                        .addContainerGap()
+                        .addComponent(labelDimensions, javax.swing.GroupLayout.PREFERRED_SIZE, 250, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
         panelImageDataLayout.setVerticalGroup(
             panelImageDataLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(panelImageDataLayout.createSequentialGroup()
-                .addContainerGap()
+                .addGap(7, 7, 7)
+                .addComponent(labelDimensions)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(panelImageDataLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(buttonLoad)
                     .addComponent(comboZoomImage, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(labelZoomImage)
                     .addComponent(buttonSaveBMP)
-                    .addComponent(buttonLoadBM9))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(scrollImage, javax.swing.GroupLayout.DEFAULT_SIZE, 429, Short.MAX_VALUE)
+                    .addComponent(buttonLoadBM9)
+                    .addComponent(checkTransparencyBM))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(scrollImage)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(panelImageDataLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(radioPickIndividualTile)
@@ -431,7 +520,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 .addContainerGap())
         );
 
-        panelPalettes.setBorder(javax.swing.BorderFactory.createTitledBorder("Palettes"));
+        panelPalettes.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "Palettes", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Segoe UI", 0, 12), new java.awt.Color(51, 51, 255))); // NOI18N
 
         panelColours.setBorder(javax.swing.BorderFactory.createEtchedBorder());
 
@@ -439,7 +528,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         panelColours.setLayout(panelColoursLayout);
         panelColoursLayout.setHorizontalGroup(
             panelColoursLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 443, Short.MAX_VALUE)
+            .addGap(0, 0, Short.MAX_VALUE)
         );
         panelColoursLayout.setVerticalGroup(
             panelColoursLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -469,7 +558,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        checkClearOnLoad.setFont(new java.awt.Font("Tahoma", 1, 11));
+        checkClearOnLoad.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         checkClearOnLoad.setSelected(true);
         checkClearOnLoad.setText("Clear on load");
 
@@ -481,6 +570,16 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
+        buttonExportPalette.setText("Export Palette");
+        buttonExportPalette.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonExportPaletteActionPerformed(evt);
+            }
+        });
+
+        checkXOpaddingPalette.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
+        checkXOpaddingPalette.setText("XO padding");
+
         javax.swing.GroupLayout panelPalettesLayout = new javax.swing.GroupLayout(panelPalettes);
         panelPalettes.setLayout(panelPalettesLayout);
         panelPalettesLayout.setHorizontalGroup(
@@ -491,11 +590,15 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                     .addComponent(panelColours, javax.swing.GroupLayout.Alignment.LEADING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, panelPalettesLayout.createSequentialGroup()
                         .addComponent(scrollPalettes, javax.swing.GroupLayout.PREFERRED_SIZE, 317, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(panelPalettesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(checkClearOnLoad, javax.swing.GroupLayout.DEFAULT_SIZE, 120, Short.MAX_VALUE)
-                            .addComponent(buttonImportBM7, javax.swing.GroupLayout.DEFAULT_SIZE, 120, Short.MAX_VALUE)
-                            .addComponent(buttonImportBM10, javax.swing.GroupLayout.DEFAULT_SIZE, 120, Short.MAX_VALUE)))
+                            .addComponent(checkClearOnLoad, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(buttonImportBM7, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(buttonImportBM10, javax.swing.GroupLayout.DEFAULT_SIZE, 150, Short.MAX_VALUE)
+                            .addComponent(buttonExportPalette, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addGroup(panelPalettesLayout.createSequentialGroup()
+                                .addComponent(checkXOpaddingPalette)
+                                .addGap(0, 0, Short.MAX_VALUE))))
                     .addComponent(labelPalettes, javax.swing.GroupLayout.Alignment.LEADING))
                 .addContainerGap())
         );
@@ -505,21 +608,25 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 .addComponent(panelColours, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addComponent(labelPalettes)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addGroup(panelPalettesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(scrollPalettes, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(panelPalettesLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(panelPalettesLayout.createSequentialGroup()
                         .addComponent(buttonImportBM7)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(buttonImportBM10)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(checkClearOnLoad)
+                        .addGap(18, 18, 18)
+                        .addComponent(buttonExportPalette)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(checkClearOnLoad)))
+                        .addComponent(checkXOpaddingPalette))
+                    .addComponent(scrollPalettes))
                 .addContainerGap())
         );
 
-        panelSCRedit.setBorder(javax.swing.BorderFactory.createTitledBorder("SCR Edit"));
+        panelSCRedit.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "SCR Edit", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Segoe UI", 0, 12), new java.awt.Color(51, 51, 255))); // NOI18N
 
-        labelSCRfile.setFont(new java.awt.Font("Tahoma", 1, 11));
+        labelSCRfile.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         labelSCRfile.setText("- no file loaded -");
         labelSCRfile.setEnabled(false);
 
@@ -527,7 +634,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         panelTilesSCR.setLayout(panelTilesSCRLayout);
         panelTilesSCRLayout.setHorizontalGroup(
             panelTilesSCRLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 339, Short.MAX_VALUE)
+            .addGap(0, 496, Short.MAX_VALUE)
         );
         panelTilesSCRLayout.setVerticalGroup(
             panelTilesSCRLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -536,7 +643,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
         scrollSCR.setViewportView(panelTilesSCR);
 
-        labelWidth.setFont(new java.awt.Font("Tahoma", 1, 11));
+        labelWidth.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         labelWidth.setText("Width:");
         labelWidth.setEnabled(false);
 
@@ -547,7 +654,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        labelHeight.setFont(new java.awt.Font("Tahoma", 1, 11));
+        labelHeight.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         labelHeight.setText("Height:");
         labelHeight.setEnabled(false);
 
@@ -566,7 +673,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        checkFlipH.setFont(new java.awt.Font("Tahoma", 1, 11));
+        checkFlipH.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         checkFlipH.setText("Flip Tile Horizontally");
         checkFlipH.setEnabled(false);
         checkFlipH.addActionListener(new java.awt.event.ActionListener() {
@@ -575,7 +682,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        checkFlipV.setFont(new java.awt.Font("Tahoma", 1, 11));
+        checkFlipV.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         checkFlipV.setText("Flip Tile Vertically");
         checkFlipV.setEnabled(false);
         checkFlipV.addActionListener(new java.awt.event.ActionListener() {
@@ -592,7 +699,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        labelZoomSCR.setFont(new java.awt.Font("Tahoma", 1, 11));
+        labelZoomSCR.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
         labelZoomSCR.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
         labelZoomSCR.setText("Zoom");
         labelZoomSCR.setEnabled(false);
@@ -613,7 +720,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
-        buttonClear.setText("Clear Tiles");
+        buttonClear.setText("New / Clear");
         buttonClear.setEnabled(false);
         buttonClear.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
@@ -629,6 +736,26 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
 
+        checkTransparencySCR.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
+        checkTransparencySCR.setSelected(true);
+        checkTransparencySCR.setText("Alt. transparency");
+        checkTransparencySCR.setEnabled(false);
+
+        checkXOpaddingSCR.setFont(new java.awt.Font("Tahoma", 1, 11)); // NOI18N
+        checkXOpaddingSCR.setText("XO padding");
+        checkXOpaddingSCR.setEnabled(false);
+
+        textfieldAlign.setEnabled(false);
+        textfieldAlign.addKeyListener(new java.awt.event.KeyAdapter() {
+            public void keyTyped(java.awt.event.KeyEvent evt) {
+                textfieldAlignKeyTyped(evt);
+            }
+        });
+
+        labelAlign.setFont(new java.awt.Font("Segoe UI", 1, 12)); // NOI18N
+        labelAlign.setText("Align (XO):");
+        labelAlign.setEnabled(false);
+
         javax.swing.GroupLayout panelSCReditLayout = new javax.swing.GroupLayout(panelSCRedit);
         panelSCRedit.setLayout(panelSCReditLayout);
         panelSCReditLayout.setHorizontalGroup(
@@ -636,13 +763,6 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             .addGroup(panelSCReditLayout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(panelSCReditLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(scrollSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 341, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addGroup(panelSCReditLayout.createSequentialGroup()
-                        .addComponent(labelSCRfile, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 106, Short.MAX_VALUE)
-                        .addComponent(labelZoomSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 62, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(comboZoomSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))
                     .addGroup(panelSCReditLayout.createSequentialGroup()
                         .addGroup(panelSCReditLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING, false)
                             .addComponent(checkFlipH, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
@@ -657,14 +777,29 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                             .addGroup(panelSCReditLayout.createSequentialGroup()
                                 .addComponent(textfieldHeight, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE)
                                 .addGap(18, 18, 18)
-                                .addComponent(buttonResize, javax.swing.GroupLayout.DEFAULT_SIZE, 103, Short.MAX_VALUE))
-                            .addComponent(checkFlipV, javax.swing.GroupLayout.DEFAULT_SIZE, 171, Short.MAX_VALUE))))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(panelSCReditLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(buttonSCRtoBMP, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(buttonClear, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(buttonSaveSCR, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(buttonLoadSCR, javax.swing.GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE))
+                                .addComponent(buttonResize)
+                                .addGap(57, 57, 57))
+                            .addComponent(checkFlipV, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addGap(22, 22, 22)
+                        .addComponent(labelAlign)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(textfieldAlign, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelSCReditLayout.createSequentialGroup()
+                        .addComponent(labelSCRfile, javax.swing.GroupLayout.PREFERRED_SIZE, 113, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(labelZoomSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 62, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(comboZoomSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 50, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(scrollSCR, javax.swing.GroupLayout.Alignment.TRAILING))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(panelSCReditLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(panelSCReditLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                        .addComponent(checkXOpaddingSCR)
+                        .addComponent(checkTransparencySCR)
+                        .addComponent(buttonSaveSCR, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(buttonLoadSCR, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(buttonClear, javax.swing.GroupLayout.DEFAULT_SIZE, 124, Short.MAX_VALUE))
+                    .addComponent(buttonSCRtoBMP, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 124, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addContainerGap())
         );
         panelSCReditLayout.setVerticalGroup(
@@ -681,9 +816,13 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                         .addComponent(buttonLoadSCR)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(buttonSaveSCR)
-                        .addGap(40, 40, 40)
-                        .addComponent(buttonSCRtoBMP)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkXOpaddingSCR)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addComponent(buttonSCRtoBMP)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(checkTransparencySCR, javax.swing.GroupLayout.PREFERRED_SIZE, 23, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                         .addComponent(buttonClear))
                     .addComponent(scrollSCR, javax.swing.GroupLayout.PREFERRED_SIZE, 189, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
@@ -696,9 +835,168 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                     .addComponent(textfieldWidth, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(labelHeight)
                     .addComponent(textfieldHeight, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(buttonResize))
+                    .addComponent(buttonResize)
+                    .addComponent(textfieldAlign, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelAlign))
                 .addContainerGap())
         );
+
+        panelEditPalette.setBorder(javax.swing.BorderFactory.createTitledBorder(null, "Color Edit", javax.swing.border.TitledBorder.DEFAULT_JUSTIFICATION, javax.swing.border.TitledBorder.DEFAULT_POSITION, new java.awt.Font("Segoe UI", 0, 12), new java.awt.Color(51, 51, 255))); // NOI18N
+
+        comboColor.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15" }));
+        comboColor.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                comboColorActionPerformed(evt);
+            }
+        });
+
+        labelColorNmbr.setText("Color:");
+
+        fieldColorR.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                fieldColorRActionPerformed(evt);
+            }
+        });
+
+        labelColorR.setText("R:");
+
+        fieldColorG.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                fieldColorGActionPerformed(evt);
+            }
+        });
+
+        labelColorG.setText("G:");
+
+        fieldColorB.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                fieldColorBActionPerformed(evt);
+            }
+        });
+
+        labelColorB.setText("B:");
+
+        fieldColorA.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                fieldColorAActionPerformed(evt);
+            }
+        });
+
+        labelColorA.setText("A:");
+
+        buttonRestoreColor.setText("Restore Color");
+        buttonRestoreColor.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonRestoreColorActionPerformed(evt);
+            }
+        });
+
+        buttonRestoreAllColors.setText("Restore ALL");
+        buttonRestoreAllColors.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                buttonRestoreAllColorsActionPerformed(evt);
+            }
+        });
+
+        javax.swing.GroupLayout panelEditPaletteLayout = new javax.swing.GroupLayout(panelEditPalette);
+        panelEditPalette.setLayout(panelEditPaletteLayout);
+        panelEditPaletteLayout.setHorizontalGroup(
+            panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(panelEditPaletteLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(buttonRestoreColor, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                        .addGap(0, 0, Short.MAX_VALUE)
+                        .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                                .addComponent(labelColorNmbr)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                                .addComponent(comboColor, javax.swing.GroupLayout.PREFERRED_SIZE, 61, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                                .addComponent(labelColorR, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(fieldColorR, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                                .addComponent(labelColorG, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(fieldColorG, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                                .addComponent(labelColorB, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(fieldColorB, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE))
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, panelEditPaletteLayout.createSequentialGroup()
+                                .addComponent(labelColorA, javax.swing.GroupLayout.PREFERRED_SIZE, 20, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(fieldColorA, javax.swing.GroupLayout.PREFERRED_SIZE, 63, javax.swing.GroupLayout.PREFERRED_SIZE))))
+                    .addComponent(buttonRestoreAllColors, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
+        );
+        panelEditPaletteLayout.setVerticalGroup(
+            panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(panelEditPaletteLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(comboColor, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelColorNmbr))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(fieldColorR, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelColorR))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(fieldColorG, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelColorG))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(fieldColorB, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelColorB))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGroup(panelEditPaletteLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(fieldColorA, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(labelColorA))
+                .addGap(18, 18, 18)
+                .addComponent(buttonRestoreColor)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(buttonRestoreAllColors)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+
+        menuBatch.setText("Batch operations");
+
+        menuitemBM6FolderToBMP.setText("Folder (BM6) --> BMP");
+        menuitemBM6FolderToBMP.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                menuitemBM6FolderToBMPActionPerformed(evt);
+            }
+        });
+        menuBatch.add(menuitemBM6FolderToBMP);
+
+        menuitemBM9FolderToBMP.setText("Folder (BM9) --> BMP");
+        menuitemBM9FolderToBMP.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                menuitemBM9FolderToBMPActionPerformed(evt);
+            }
+        });
+        menuBatch.add(menuitemBM9FolderToBMP);
+        menuBatch.add(jSeparator1);
+
+        menuItemSCRFolderToBMP.setText("Folder (SCRs) --> BMP");
+        menuItemSCRFolderToBMP.setEnabled(false);
+        menuItemSCRFolderToBMP.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                menuItemSCRFolderToBMPActionPerformed(evt);
+            }
+        });
+        menuBatch.add(menuItemSCRFolderToBMP);
+        menuBatch.add(jSeparator2);
+
+        checkmenuAllPalettes.setText("Export using all palettes");
+        menuBatch.add(checkmenuAllPalettes);
+
+        menubarMain.add(menuBatch);
+
+        setJMenuBar(menubarMain);
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
         getContentPane().setLayout(layout);
@@ -708,21 +1006,26 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 .addContainerGap()
                 .addComponent(panelImageData, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
-                    .addComponent(panelSCRedit, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(panelPalettes, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createSequentialGroup()
+                        .addComponent(panelPalettes, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(panelEditPalette, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(panelSCRedit, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(panelImageData, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
-                        .addComponent(panelPalettes, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(panelPalettes, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                            .addComponent(panelEditPalette, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(panelSCRedit, 0, 308, Short.MAX_VALUE))
-                    .addComponent(panelImageData, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                        .addComponent(panelSCRedit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
 
@@ -739,7 +1042,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
             openPalette(chooser.getSelectedFile().getAbsolutePath());
             listPalettes.setSelectedIndex(modelListPal.size() - 1);
-            changePalette();
+            selectPalette();
             
             listPalettes.requestFocusInWindow();
 
@@ -749,12 +1052,12 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
     private void listPalettesMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_listPalettesMouseClicked
         // TODO add your handling code here:
-        changePalette();
+        selectPalette();
     }//GEN-LAST:event_listPalettesMouseClicked
 
     private void listPalettesKeyReleased(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_listPalettesKeyReleased
         // TODO add your handling code here:
-        changePalette();
+        selectPalette();
     }//GEN-LAST:event_listPalettesKeyReleased
 
     private void buttonLoadActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonLoadActionPerformed
@@ -780,8 +1083,11 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     private void comboZoomImageActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_comboZoomImageActionPerformed
         // TODO add your handling code here:
         //displayTiles();
-        if (image_loaded)
+        if (image_loaded){
             changeZoom(comboZoomImage.getSelectedIndex() + 1);
+            
+            highlightTiles();
+        }
     }//GEN-LAST:event_comboZoomImageActionPerformed
 
     private void buttonSaveBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSaveBMPActionPerformed
@@ -789,109 +1095,18 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         JFileChooser chooser = new JFileChooser();
         chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
         chooser.setDialogTitle("Save BMP file");
+        chooser.setSelectedFile(new File(this.getTitle().split(" ")[0] + ".bmp"));
         chooser.setFileFilter(new FileNameExtensionFilter("BMP file", "bmp"));
 
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
-            saveBMP(chooser.getSelectedFile().getAbsolutePath());
-
+            saveBMP(chooser.getSelectedFile().getAbsolutePath(), checkTransparencyBM.isSelected());
+            
             lastDirectorySave = chooser.getSelectedFile().getPath();
+            
+            JOptionPane.showMessageDialog(null, "File created:\n" + chooser.getSelectedFile().getAbsolutePath(),
+                "Success", JOptionPane.INFORMATION_MESSAGE);
         }
     }//GEN-LAST:event_buttonSaveBMPActionPerformed
-
-    private void buttonLoadSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonLoadSCRActionPerformed
-        // TODO add your handling code here:
-        JFileChooser chooser = new JFileChooser();
-        chooser.setCurrentDirectory(new java.io.File(lastDirectory));
-        chooser.setDialogTitle("Load SCR file");
-        chooser.setFileFilter(new FileNameExtensionFilter("SCR file", "SCR"));
-
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
-            selectedSCR = 0;
-            lastSCRclicked = null;
-
-            openSCR(chooser.getSelectedFile().getAbsolutePath());
-
-            lastDirectory = chooser.getSelectedFile().getPath();
-
-            labelSCRfile.setText(chooser.getSelectedFile().getName());
-        }
-    }//GEN-LAST:event_buttonLoadSCRActionPerformed
-
-    private void comboZoomSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_comboZoomSCRActionPerformed
-        // TODO add your handling code here:
-        if(scr_loaded)
-            changeZoomSCR(comboZoomSCR.getSelectedIndex() + 1);
-    }//GEN-LAST:event_comboZoomSCRActionPerformed
-
-    private void checkFlipHActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_checkFlipHActionPerformed
-        // TODO add your handling code here:
-        lastSCRclicked.flipHorizontally(checkFlipH.isSelected());
-
-        int x = selectedSCR % tileDataSCR[0].length;
-        int y = selectedSCR / tileDataSCR[0].length;
-
-        tileDataSCR[y][x].flipH = checkFlipH.isSelected();
-    }//GEN-LAST:event_checkFlipHActionPerformed
-
-    private void checkFlipVActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_checkFlipVActionPerformed
-        // TODO add your handling code here:
-        lastSCRclicked.flipVertically(checkFlipV.isSelected());
-
-        int x = selectedSCR % tileDataSCR[0].length;
-        int y = selectedSCR / tileDataSCR[0].length;
-
-        tileDataSCR[y][x].flipV = checkFlipV.isSelected();
-    }//GEN-LAST:event_checkFlipVActionPerformed
-
-    private void buttonSCRtoBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSCRtoBMPActionPerformed
-        // TODO add your handling code here:
-        JFileChooser chooser = new JFileChooser();
-        chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
-        chooser.setDialogTitle("Save BMP file");
-        chooser.setFileFilter(new FileNameExtensionFilter("BMP file", "bmp"));
-
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
-            saveSCRtoBMP(chooser.getSelectedFile().getAbsolutePath());
-
-            lastDirectorySave = chooser.getSelectedFile().getPath();
-        }
-    }//GEN-LAST:event_buttonSCRtoBMPActionPerformed
-
-    private void buttonClearActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonClearActionPerformed
-        // TODO add your handling code here:
-        clearTilesSCR();
-    }//GEN-LAST:event_buttonClearActionPerformed
-
-    private void textfieldWidthKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_textfieldWidthKeyTyped
-        // TODO add your handling code here:
-        if(evt.getKeyChar()<'0' || evt.getKeyChar()>'9') // only numbers
-            evt.consume();
-    }//GEN-LAST:event_textfieldWidthKeyTyped
-
-    private void textfieldHeightKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_textfieldHeightKeyTyped
-        // TODO add your handling code here:
-        if(evt.getKeyChar()<'0' || evt.getKeyChar()>'9') // only numbers
-            evt.consume();
-    }//GEN-LAST:event_textfieldHeightKeyTyped
-
-    private void buttonResizeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonResizeActionPerformed
-        // TODO add your handling code here:
-        resizeSCR();
-    }//GEN-LAST:event_buttonResizeActionPerformed
-
-    private void buttonSaveSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSaveSCRActionPerformed
-        // TODO add your handling code here:
-        JFileChooser chooser = new JFileChooser();
-        chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
-        chooser.setDialogTitle("Save SCR file");
-        chooser.setFileFilter(new FileNameExtensionFilter("SCR file", "SCR"));
-
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
-            saveSCR(chooser.getSelectedFile().getAbsolutePath());
-
-            lastDirectorySave = chooser.getSelectedFile().getPath();
-        }
-    }//GEN-LAST:event_buttonSaveSCRActionPerformed
 
     private void radioPickIndividualTileActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_radioPickIndividualTileActionPerformed
         // TODO add your handling code here:
@@ -930,13 +1145,262 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
             openPalette(chooser.getSelectedFile().getAbsolutePath());
             listPalettes.setSelectedIndex(modelListPal.size() - 1);
-            changePalette();
+            selectPalette();
 
             listPalettes.requestFocusInWindow();
 
             lastDirectory = chooser.getSelectedFile().getPath();
         }
     }//GEN-LAST:event_buttonImportBM10ActionPerformed
+
+    private void menuitemBM6FolderToBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_menuitemBM6FolderToBMPActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectory));
+        chooser.setDialogTitle("Choose directory containing BM6 files");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+        // disable the "All files" option.
+        chooser.setAcceptAllFileFilterUsed(false);
+        
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            lastClickedTileIMG = -1;
+            lastClicked = null;
+            
+            batchExportBMP(chooser.getSelectedFile().getAbsolutePath(), 6);
+
+            lastDirectory = chooser.getSelectedFile().getPath();
+
+            //this.setTitle(chooser.getSelectedFile().getName() + " - " + title);
+        }
+    }//GEN-LAST:event_menuitemBM6FolderToBMPActionPerformed
+
+    private void menuitemBM9FolderToBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_menuitemBM9FolderToBMPActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectory));
+        chooser.setDialogTitle("Choose directory containing BM6 files");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+        // disable the "All files" option.
+        chooser.setAcceptAllFileFilterUsed(false);
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            lastClickedTileIMG = -1;
+            lastClicked = null;
+            
+            batchExportBMP(chooser.getSelectedFile().getAbsolutePath(), 9);
+
+            lastDirectory = chooser.getSelectedFile().getPath();
+
+            //this.setTitle(chooser.getSelectedFile().getName() + " - " + title);
+        }
+    }//GEN-LAST:event_menuitemBM9FolderToBMPActionPerformed
+
+    private void menuItemSCRFolderToBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_menuItemSCRFolderToBMPActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectory));
+        chooser.setDialogTitle("Choose directory containing SCR files - The current BM file will be used.");
+        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+
+        // disable the "All files" option.
+        chooser.setAcceptAllFileFilterUsed(false);
+        
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            lastClickedTileIMG = -1;
+            lastClicked = null;
+            
+            batchExportSCR(chooser.getSelectedFile().getAbsolutePath());
+
+            lastDirectory = chooser.getSelectedFile().getPath();
+
+            //this.setTitle(chooser.getSelectedFile().getName() + " - " + title);
+        }
+    }//GEN-LAST:event_menuItemSCRFolderToBMPActionPerformed
+
+    private void comboColorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_comboColorActionPerformed
+        // TODO add your handling code here:
+        selectColor();
+    }//GEN-LAST:event_comboColorActionPerformed
+
+    private void fieldColorRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fieldColorRActionPerformed
+        // TODO add your handling code here:
+        if (checkNumericFields()){
+            modifyColor();
+        }
+    }//GEN-LAST:event_fieldColorRActionPerformed
+
+    private void fieldColorGActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fieldColorGActionPerformed
+        // TODO add your handling code here:
+        if (checkNumericFields()){
+            modifyColor();
+        }
+    }//GEN-LAST:event_fieldColorGActionPerformed
+
+    private void fieldColorBActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fieldColorBActionPerformed
+        // TODO add your handling code here:
+        if (checkNumericFields()){
+            modifyColor();
+        }
+    }//GEN-LAST:event_fieldColorBActionPerformed
+
+    private void fieldColorAActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_fieldColorAActionPerformed
+        // TODO add your handling code here:
+        if (checkNumericFields()){
+            modifyColor();
+        }
+    }//GEN-LAST:event_fieldColorAActionPerformed
+
+    private void buttonRestoreColorActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonRestoreColorActionPerformed
+        // TODO add your handling code here:
+        restoreColor();
+    }//GEN-LAST:event_buttonRestoreColorActionPerformed
+
+    private void buttonRestoreAllColorsActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonRestoreAllColorsActionPerformed
+        // TODO add your handling code here:
+        restoreAllColors();
+    }//GEN-LAST:event_buttonRestoreAllColorsActionPerformed
+
+    private void buttonExportPaletteActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonExportPaletteActionPerformed
+        // TODO add your handling code here:
+        IndexColorModel cm = palettes.get(lastPalette);
+        int pal_size = cm.getMapSize();        
+        
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
+        if (pal_size == 16){
+            chooser.setDialogTitle("Save BM7 file");
+            chooser.setFileFilter(new FileNameExtensionFilter("BM7 file", "BM7"));
+        }
+        else{
+            chooser.setDialogTitle("Save BM10 file");
+            chooser.setFileFilter(new FileNameExtensionFilter("BM10 file", "BM10"));
+        }
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            String path = chooser.getSelectedFile().getAbsolutePath();
+            
+            if ( pal_size == 16 && !path.endsWith(".BM7") )
+                path += ".BM7";
+            else if ( pal_size == 256 &&  !path.endsWith(".BM10") )
+                path += ".BM10";
+            
+            savePalette(path);
+
+            lastDirectorySave = path;
+        }
+    }//GEN-LAST:event_buttonExportPaletteActionPerformed
+
+    private void buttonSCRtoBMPActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSCRtoBMPActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
+        chooser.setDialogTitle("Save BMP file");
+        chooser.setSelectedFile(new File(labelSCRfile.getText() + ".bmp"));
+        chooser.setFileFilter(new FileNameExtensionFilter("BMP file", "bmp"));
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            saveSCRtoBMP(chooser.getSelectedFile().getAbsolutePath(), checkTransparencySCR.isSelected());
+
+            lastDirectorySave = chooser.getSelectedFile().getPath();
+
+            JOptionPane.showMessageDialog(null, "File created:\n" + chooser.getSelectedFile().getAbsolutePath(),
+                "Success", JOptionPane.INFORMATION_MESSAGE);
+        }
+    }//GEN-LAST:event_buttonSCRtoBMPActionPerformed
+
+    private void buttonClearActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonClearActionPerformed
+        // TODO add your handling code here:
+        clearTilesSCR();
+    }//GEN-LAST:event_buttonClearActionPerformed
+
+    private void buttonSaveSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonSaveSCRActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectorySave));
+        chooser.setDialogTitle("Save SCR file");
+        chooser.setFileFilter(new FileNameExtensionFilter("SCR file", "SCR"));
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            String path = chooser.getSelectedFile().getAbsolutePath();
+
+            if (!path.endsWith(".SCR") && !path.endsWith(".scr"))
+            path += ".SCR";
+
+            saveSCR(path);
+
+            lastDirectorySave = path;
+        }
+    }//GEN-LAST:event_buttonSaveSCRActionPerformed
+
+    private void buttonLoadSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonLoadSCRActionPerformed
+        // TODO add your handling code here:
+        JFileChooser chooser = new JFileChooser();
+        chooser.setCurrentDirectory(new java.io.File(lastDirectory));
+        chooser.setDialogTitle("Load SCR file");
+        chooser.setFileFilter(new FileNameExtensionFilter("SCR file", "SCR"));
+
+        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION){
+            selectedSCR = 0;
+            lastSCRclicked = null;
+
+            openSCR(chooser.getSelectedFile().getAbsolutePath(), true);
+
+            lastDirectory = chooser.getSelectedFile().getPath();
+
+            labelSCRfile.setText(chooser.getSelectedFile().getName());
+        }
+    }//GEN-LAST:event_buttonLoadSCRActionPerformed
+
+    private void comboZoomSCRActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_comboZoomSCRActionPerformed
+        // TODO add your handling code here:
+        if(scr_loaded)
+        changeZoomSCR(comboZoomSCR.getSelectedIndex() + 1);
+    }//GEN-LAST:event_comboZoomSCRActionPerformed
+
+    private void checkFlipVActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_checkFlipVActionPerformed
+        // TODO add your handling code here:
+        lastSCRclicked.flipVertically(checkFlipV.isSelected());
+
+        int x = selectedSCR % tileDataSCR[0].length;
+        int y = selectedSCR / tileDataSCR[0].length;
+
+        tileDataSCR[y][x].flipV = checkFlipV.isSelected();
+    }//GEN-LAST:event_checkFlipVActionPerformed
+
+    private void checkFlipHActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_checkFlipHActionPerformed
+        // TODO add your handling code here:
+        lastSCRclicked.flipHorizontally(checkFlipH.isSelected());
+
+        int x = selectedSCR % tileDataSCR[0].length;
+        int y = selectedSCR / tileDataSCR[0].length;
+
+        tileDataSCR[y][x].flipH = checkFlipH.isSelected();
+    }//GEN-LAST:event_checkFlipHActionPerformed
+
+    private void buttonResizeActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_buttonResizeActionPerformed
+        // TODO add your handling code here:
+        resizeSCR();
+    }//GEN-LAST:event_buttonResizeActionPerformed
+
+    private void textfieldHeightKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_textfieldHeightKeyTyped
+        // TODO add your handling code here:
+        if(evt.getKeyChar()<'0' || evt.getKeyChar()>'9') // only numbers
+        evt.consume();
+    }//GEN-LAST:event_textfieldHeightKeyTyped
+
+    private void textfieldWidthKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_textfieldWidthKeyTyped
+        // TODO add your handling code here:
+        if(evt.getKeyChar()<'0' || evt.getKeyChar()>'9') // only numbers
+        evt.consume();
+    }//GEN-LAST:event_textfieldWidthKeyTyped
+
+    private void textfieldAlignKeyTyped(java.awt.event.KeyEvent evt) {//GEN-FIRST:event_textfieldAlignKeyTyped
+        // TODO add your handling code here:
+        if(evt.getKeyChar()<'0' || evt.getKeyChar()>'9') // only numbers
+        evt.consume();
+    }//GEN-LAST:event_textfieldAlignKeyTyped
 
     /**
     * @param args the command line arguments
@@ -948,7 +1412,21 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         });
     }*/
-
+    
+    /*
+    Parses either BM7 or BM10 file, containing 4bpp (16 colors) and 8bpp (256 colors) palettes.
+    Format is the same in both GC and XO, although in XO, files have extra bytes to be 2048 byte aligned.
+    
+    In GC, there are 2 BM10 palettes that have a different format: 0007.BM10 and 0016.BM10.
+    In these files, height and width data is included in the header, and colors seem to
+    be defined with 2 bytes instead of 4... which I can't make any sense of.
+    
+    The BM9 files that use these palettes don't seem to be very important.
+    In fact, they have no SCR files associated to them and most of them
+    seem to be the exact same file, so probably early tests.
+    
+    I'll have to live with just seeing these files in black & white.
+    */
     public void openPalette(String filename){
         try{
             // Read the contents of the file as bytes
@@ -967,13 +1445,18 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
             if (type == 7){
                 // Make sure it's a BM7 file
-                if (f.length() != 96)
+                if (f.length() != 96 && f.length() != 2048) // XO format is always 2048 bytes long
                     valid = false;
             }
             else{
                 // Make sure it's a BM10 file
-                if (f.length() != 1056)
+                if (f.length() != 1056 && f.length() != 2048) // XO format is always 2048 bytes long
                     valid = false;
+            }
+            
+            if (f.length() == 2048){
+                checkXOpaddingSCR.setSelected(true);
+                checkXOpaddingPalette.setSelected(true);
             }
 
             byte[] header = new byte[32];
@@ -1018,6 +1501,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
             // Add the ColorModel to the list
             palettes.add(new IndexColorModel(bpp, pal_size, r, g, b, a));
+            palettes_mod.add(new IndexColorModel(bpp, pal_size, r, g, b, a));
 
             // Update the palette list in the UI
             int pos = filename.lastIndexOf('/');
@@ -1032,10 +1516,10 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         }
     }
 
-
     // Clear the list of palettes and sets the default palette as the one selected
     public void initPalettes(){
         palettes = new ArrayList<IndexColorModel>();
+        palettes_mod = new ArrayList<IndexColorModel>();
 
         int pal_size = 16;
         int extra_colour = 15;
@@ -1095,16 +1579,55 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         //panelColours.repaint();
 
         palettes.add(new IndexColorModel(bpp, pal_size, r, g, b, a));
+        palettes_mod.add(new IndexColorModel(bpp, pal_size, r, g, b, a));
 
         modelListPal.clear();
         modelListPal.addElement("<Default palette>");
 
         listPalettes.setSelectedIndex(0);
     }
+    
+    // Sets the Palette Edit panel to point at color 0 of the selected palette
+    public void initPalEditPanel(){
+        // Prepare contents of the combobox with the colors
+        // It can be a palette with 16 or 256 colors
+        ComboBoxModel m;
+        int pal_size = 16;
+        if (!buttonImportBM7.isEnabled()){
+            pal_size = 256;       
+            m = new DefaultComboBoxModel(color256);
+            comboColor.setModel(m);
+        }
+        else{
+            m = new DefaultComboBoxModel(color16);
+            comboColor.setModel(m);
+        }
+        
+        // Get palette's Rs, Gs, Bs and As
+        IndexColorModel cm = palettes_mod.get(lastPalette);
 
+        byte[] r = new byte[pal_size];
+        byte[] g = new byte[pal_size];
+        byte[] b = new byte[pal_size];
+        byte[] a = new byte[pal_size];
+
+        cm.getReds(r);
+        cm.getBlues(b);
+        cm.getGreens(g);
+        cm.getAlphas(a);
+        
+        // Select entry 0 in combobox
+        comboColor.setSelectedIndex(0);
+        
+        // Fill up the fields with values from color 0
+        fieldColorR.setText("" + ( r[0] & 0xff ) );
+        fieldColorG.setText("" + ( g[0] & 0xff ) );
+        fieldColorB.setText("" + ( b[0] & 0xff ) );
+        fieldColorA.setText("" + ( a[0] & 0xff ) );
+    }
 
     // Changes the palette to the currently selected one in the list
-    public void changePalette(){
+    public void selectPalette(){
         // If we're on the same index we were before, do nothing
         if (lastPalette == listPalettes.getSelectedIndex())
             return;
@@ -1117,7 +1640,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         
         lastPalette = listPalettes.getSelectedIndex();
 
-        IndexColorModel cm = palettes.get(lastPalette);
+        IndexColorModel cm = palettes_mod.get(lastPalette);
 
         byte[] r = new byte[pal_size];
         byte[] g = new byte[pal_size];
@@ -1156,6 +1679,275 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
         panelColours.repaint();
 
+        /*// Re-draw the loaded image (if it's loaded) with the selected ColorModel
+        if (image_loaded){
+            //displayTiles();
+            Component[] tiles = panelTilesIMG.getComponents();
+            TilePanel tp;
+
+            for (int i = 0; i < tiles.length; i++){
+                tp = (TilePanel) tiles[i];
+
+                tp.setCModel(cm);
+            }
+
+            // Do the same for the SCR tiles, if we loaded an SCR
+            if (scr_loaded){
+                tiles = panelTilesSCR.getComponents();
+
+                for (int i = 0; i < tiles.length; i++){
+                    tp = (TilePanel) tiles[i];
+
+                    tp.setCModel(cm);
+                }
+                panelTilesSCR.repaint();
+            }
+            panelTilesIMG.repaint();
+        }*/        
+        
+        repaintAll(cm);
+        
+        initPalEditPanel();
+    }
+
+    // Displays RGBA values of selected color in palette
+    public void selectColor(){
+        // Get palette's Rs, Gs, Bs and As
+        IndexColorModel cm = palettes_mod.get(lastPalette);
+
+        byte[] r = new byte[palettes_mod.get(lastPalette).getMapSize()];
+        byte[] g = new byte[palettes_mod.get(lastPalette).getMapSize()];
+        byte[] b = new byte[palettes_mod.get(lastPalette).getMapSize()];
+        byte[] a = new byte[palettes_mod.get(lastPalette).getMapSize()];
+
+        cm.getReds(r);
+        cm.getBlues(b);
+        cm.getGreens(g);
+        cm.getAlphas(a);
+        
+        // Fill up the fields with values from color 0
+        fieldColorR.setText("" + ( r[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorG.setText("" + ( g[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorB.setText("" + ( b[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorA.setText("" + ( a[comboColor.getSelectedIndex()] & 0xff ) );
+    }
+
+    // Ensures numeric fields contain numbers between 0 and 255
+    public boolean checkNumericFields(){
+        boolean ok = true;
+        int number = 0;
+        
+        try{
+            number = Integer.parseInt(fieldColorR.getText());
+
+            if (number > 255)
+                number = 255;
+            else if (number < 0)
+                number = 0;
+            fieldColorR.setText("" + number);
+
+            fieldColorR.setBackground(new Color(255, 255, 255));
+        }
+        catch(NumberFormatException e){
+            fieldColorR.setBackground(new Color(255, 204, 204));
+            ok = false;
+        }
+        
+        try{
+            number = Integer.parseInt(fieldColorG.getText());
+
+            if (number > 255)
+                number = 255;
+            else if (number < 0)
+                number = 0;
+            fieldColorG.setText("" + number);
+
+            fieldColorG.setBackground(new Color(255, 255, 255));
+        }
+        catch(NumberFormatException e){
+            fieldColorG.setBackground(new Color(255, 204, 204));
+            ok = false;
+        }
+        
+        try{
+            number = Integer.parseInt(fieldColorB.getText());
+
+            if (number > 255)
+                number = 255;
+            else if (number < 0)
+                number = 0;
+            fieldColorB.setText("" + number);
+
+            fieldColorB.setBackground(new Color(255, 255, 255));
+        }
+        catch(NumberFormatException e){
+            fieldColorB.setBackground(new Color(255, 204, 204));
+            ok = false;
+        }
+        
+        try{
+            number = Integer.parseInt(fieldColorA.getText());
+
+            if (number > 255)
+                number = 255;
+            else if (number < 0)
+                number = 0;
+            fieldColorA.setText("" + number);
+
+            fieldColorA.setBackground(new Color(255, 255, 255));
+        }
+        catch(NumberFormatException e){
+            fieldColorA.setBackground(new Color(255, 204, 204));
+            ok = false;
+        }
+        
+        return ok;
+    }
+    
+    // Saves changes to color into palette
+    public void modifyColor(){
+        int bpp = 4;
+        int pal_size;
+        
+        // Get palette's Rs, Gs, Bs and As
+        IndexColorModel cm = palettes_mod.get(lastPalette);
+        
+        pal_size = cm.getMapSize();
+
+        byte[] r = new byte[pal_size];
+        byte[] g = new byte[pal_size];
+        byte[] b = new byte[pal_size];
+        byte[] a = new byte[pal_size];
+
+        cm.getReds(r);
+        cm.getBlues(b);
+        cm.getGreens(g);
+        cm.getAlphas(a);
+        
+        r[comboColor.getSelectedIndex()] = (byte) ( Integer.parseInt(fieldColorR.getText()) & 0xff );
+        g[comboColor.getSelectedIndex()] = (byte) ( Integer.parseInt(fieldColorG.getText()) & 0xff );
+        b[comboColor.getSelectedIndex()] = (byte) ( Integer.parseInt(fieldColorB.getText()) & 0xff );
+        a[comboColor.getSelectedIndex()] = (byte) ( Integer.parseInt(fieldColorA.getText()) & 0xff );
+        
+        if (pal_size == 256)
+            bpp = 8;
+        
+        IndexColorModel cm_new = new IndexColorModel(bpp, pal_size, r, g, b, a);
+        
+        palettes_mod.set(lastPalette, cm_new);
+        
+        
+        Component[] colPanels = panelColours.getComponents();
+        
+        colPanels[comboColor.getSelectedIndex()].setBackground(new Color(
+                                                        r[comboColor.getSelectedIndex()] & 0xff, 
+                                                        g[comboColor.getSelectedIndex()] & 0xff, 
+                                                        b[comboColor.getSelectedIndex()] & 0xff));
+        
+        
+        panelColours.repaint();
+        
+        repaintAll(cm_new);
+    }
+    
+    // Restores values for selected color in palette
+    public void restoreColor(){
+        // Get original palette's Rs, Gs, Bs and As
+        IndexColorModel cm = palettes.get(lastPalette);
+        IndexColorModel cm_mod = palettes_mod.get(lastPalette);
+        int bpp = 4;
+        int pal_size = cm.getMapSize();
+        if (pal_size == 256)
+            bpp = 8;
+
+        byte[] r = new byte[pal_size];
+        byte[] g = new byte[pal_size];
+        byte[] b = new byte[pal_size];
+        byte[] a = new byte[pal_size];
+
+        cm.getReds(r);
+        cm.getBlues(b);
+        cm.getGreens(g);
+        cm.getAlphas(a);
+        
+        byte[] r2 = new byte[pal_size];
+        byte[] g2 = new byte[pal_size];
+        byte[] b2 = new byte[pal_size];
+        byte[] a2 = new byte[pal_size];
+
+        cm_mod.getReds(r2);
+        cm_mod.getBlues(b2);
+        cm_mod.getGreens(g2);
+        cm_mod.getAlphas(a2);
+        
+        // Copy values from original to mod
+        r2[comboColor.getSelectedIndex()] = r[comboColor.getSelectedIndex()];
+        g2[comboColor.getSelectedIndex()] = g[comboColor.getSelectedIndex()];
+        b2[comboColor.getSelectedIndex()] = b[comboColor.getSelectedIndex()];
+        a2[comboColor.getSelectedIndex()] = a[comboColor.getSelectedIndex()];
+                
+        // Fill up the fields with values from color 0
+        fieldColorR.setText("" + ( r[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorG.setText("" + ( g[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorB.setText("" + ( b[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorA.setText("" + ( a[comboColor.getSelectedIndex()] & 0xff ) );
+                
+        IndexColorModel cm_new = new IndexColorModel(bpp, pal_size, r2, g2, b2, a2);
+        palettes_mod.set(lastPalette, cm_new);
+        
+        Component[] colPanels = panelColours.getComponents();
+        
+        colPanels[comboColor.getSelectedIndex()].setBackground(new Color(
+                                                        r[comboColor.getSelectedIndex()] & 0xff, 
+                                                        g[comboColor.getSelectedIndex()] & 0xff, 
+                                                        b[comboColor.getSelectedIndex()] & 0xff));
+        
+        
+        panelColours.repaint();
+        
+        repaintAll(cm_new);
+    }
+    
+    
+    // Restores values for selected color in palette
+    public void restoreAllColors(){
+        // Get original palette's Rs, Gs, Bs and As
+        IndexColorModel cm = palettes.get(lastPalette);
+        int pal_size = cm.getMapSize();
+
+        byte[] r = new byte[pal_size];
+        byte[] g = new byte[pal_size];
+        byte[] b = new byte[pal_size];
+        byte[] a = new byte[pal_size];
+
+        cm.getReds(r);
+        cm.getBlues(b);
+        cm.getGreens(g);
+        cm.getAlphas(a);
+        
+        // Select entry 0 in combobox
+        comboColor.getSelectedIndex();
+        
+        // Fill up the fields with values from color 0
+        fieldColorR.setText("" + ( r[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorG.setText("" + ( g[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorB.setText("" + ( b[comboColor.getSelectedIndex()] & 0xff ) );
+        fieldColorA.setText("" + ( a[comboColor.getSelectedIndex()] & 0xff ) );
+                
+        palettes_mod.set(lastPalette, cm);
+        
+        Component[] colPanels = panelColours.getComponents();
+        for (int i = 0; i < colPanels.length; i++){
+            colPanels[i].setBackground(new Color(r[i] & 0xff, g[i] & 0xff, b[i] & 0xff));
+        }
+        
+        panelColours.repaint();
+        
+        repaintAll(cm);
+    }
+    
+    
+    public void repaintAll(IndexColorModel cm){
         // Re-draw the loaded image (if it's loaded) with the selected ColorModel
         if (image_loaded){
             //displayTiles();
@@ -1182,8 +1974,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             panelTilesIMG.repaint();
         }
     }
-
-
+    
+    
     public void openBMfile(String filename, int type){
         try{
             // Read the contents of the file as bytes
@@ -1255,6 +2047,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
 
             image_loaded = true;
+            
+            labelDimensions.setText("Dimensions (in tiles): " + tilesBMfile[0].length + " x " + tilesBMfile.length);
 
             if (checkClearOnLoad.isSelected())
                 initPalettes();
@@ -1264,9 +2058,17 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             displayTiles();
 
             buttonSaveBMP.setEnabled(true);
+            checkTransparencyBM.setEnabled(true);
+            checkXOpaddingSCR.setEnabled(true);
+            buttonClear.setEnabled(true);
 
             resetSCRsection();
             scr_loaded = false;
+            
+            tileDataSCR = null;
+            highlights = null;
+            
+            menuItemSCRFolderToBMP.setEnabled(true);
 
         } catch (IOException ex){
             System.err.println("ERROR: Couldn't read BM6 / BM9 file!!");
@@ -1286,7 +2088,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         // Disable SCR options
         buttonSaveSCR.setEnabled(false);
         buttonSCRtoBMP.setEnabled(false);
-        buttonClear.setEnabled(false);
+        //buttonClear.setEnabled(false);
         buttonResize.setEnabled(false);
 
         checkFlipH.setSelected(false);
@@ -1300,9 +2102,16 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         textfieldWidth.setEnabled(false);
         textfieldHeight.setText("");
         textfieldHeight.setEnabled(false);
+        
+        labelAlign.setEnabled(false);
+        textfieldAlign.setText("");
+        textfieldAlign.setEnabled(false);
 
         labelZoomSCR.setEnabled(true);
         comboZoomSCR.setEnabled(true);
+        
+        checkTransparencySCR.setEnabled(false);
+        checkXOpaddingSCR.setEnabled(false);
     }
 
 
@@ -1314,7 +2123,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
         for (int i = 0; i < tilesBMfile.length; i++){
             for (int j = 0; j < tilesBMfile[i].length; j++){
-                TilePanel tp = new TilePanel(tilesBMfile[i][j], palettes.get(listPalettes.getSelectedIndex()), counter, zoom);
+                TilePanel tp = new TilePanel(tilesBMfile[i][j], palettes_mod.get(listPalettes.getSelectedIndex()), counter, zoom);
                 tp.addMouseListener(listener);
 
                 tp.setBounds(j*10*zoom, i*10*zoom, 10*zoom, 10*zoom);
@@ -1426,6 +2235,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         String folder = filename.substring(0, pos + 1);
         String name = filename.substring(pos + 1, pos + 5);
 
+        try{
         int number = Integer.parseInt(name);
         String new_name = "";
 
@@ -1449,6 +2259,8 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             else{
                 openPalette(folder + new_name);
                 counter++;
+                palette_after = true;
+                lastPaletteFound = folder + new_name;
             }
         }
 
@@ -1465,15 +2277,22 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
                 if (f.exists()){
                     openPalette(folder + new_name);
                     found = true;   // Stop
+                    palette_after = false;
+                    lastPaletteFound = folder + new_name;   // Serves no purpose in this situation though
                 }
             }
+        }
+        } catch (NumberFormatException ex){
+            //Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+            JOptionPane.showMessageDialog(null, "Loaded BMx file doesn't start with 4 digits.",
+                "Error - Palette files not loaded", JOptionPane.ERROR_MESSAGE);
         }
 
         // If we found palettes, choose the first one
         if (palettes.size() > 1){
             listPalettes.setSelectedIndex(1);
             lastPalette = 0;
-            changePalette();
+            selectPalette();
         }
         
         //END
@@ -1495,15 +2314,31 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         return name;
     }
 
+    
+    public String getSCRname(int number){
+        String name = "";
 
-    public void openSCR(String filename){
+        if (number < 10)
+            name += "000";
+        else if (number < 100)
+            name += "00";
+        else if (number < 1000)
+            name += "0";
+
+        name += number + ".SCR";
+
+        return name;
+    }
+
+
+    public void openSCR(String filename, boolean report){
         try{
             // Read the contents of the file as bytes
             RandomAccessFile f = new RandomAccessFile(filename, "r");
 
             boolean valid = true;
 
-            // Make sure it's a BM6 file
+            // Make sure it's an SCR file
             byte[] header = new byte[32];
 
             f.read(header);
@@ -1529,6 +2364,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
             int width = header[4] << 24 | (header[5] & 0xFF) << 16 | (header[6] & 0xFF) << 8 | (header[7] & 0xFF);
             int height = header[8] << 24 | (header[9] & 0xFF) << 16 | (header[10] & 0xFF) << 8 | (header[11] & 0xFF);
+            int align = header[16] << 24 | (header[17] & 0xFF) << 16 | (header[18] & 0xFF) << 8 | (header[19] & 0xFF);
 
             int num_tiles = width * height; // We need to determine the number of tiles because SCR files usually have padding
 
@@ -1581,12 +2417,14 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
 
             // Fill the SCR panel with the indicated tiles taken from the image
-            displaySCR();
+            displaySCR(report);
 
             // Enable the rest of the SCR features
             buttonSaveSCR.setEnabled(true);
             buttonSCRtoBMP.setEnabled(true);
-            buttonClear.setEnabled(true);
+            checkTransparencySCR.setEnabled(true);
+            checkXOpaddingSCR.setEnabled(true);
+            //buttonClear.setEnabled(true);
             buttonResize.setEnabled(true);
 
             checkFlipH.setEnabled(flipsAllowed);
@@ -1598,6 +2436,10 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             textfieldWidth.setEnabled(true);
             textfieldHeight.setText("" + height);
             textfieldHeight.setEnabled(true);
+            
+            labelAlign.setEnabled(true);
+            textfieldAlign.setText("" + align);
+            textfieldAlign.setEnabled(true);
 
             // Set the first tile as selected
             selectedSCR = 0;
@@ -1616,8 +2458,9 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     }
 
 
-    public void displaySCR(){
+    public void displaySCR(boolean report){
         panelTilesSCR.removeAll();
+        //highlights = null;
 
         int zoom = comboZoomSCR.getSelectedIndex() + 1;
         int counter = 0;
@@ -1628,6 +2471,10 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         // Width and Height in tiles
         int height = tileDataSCR.length;
         int width = tileDataSCR[0].length;
+        
+        // Last tile
+        int last_tile = tilesBMfile.length * tilesBMfile[0].length;
+        boolean flag_out_of_bounds = false;
 
         //int height_img = tilesBM6.length;
         int width_img = tilesBMfile[0].length;
@@ -1635,13 +2482,25 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         for (int i = 0; i < height; i++){
             for (int j = 0; j < width; j++){
                 position = tileDataSCR[i][j].position;
-
-                x = position % width_img;
-                y = position / width_img;
+                
+                if (position >= last_tile){ // tile requested out of the boundaries of the BM6
+                    flag_out_of_bounds = true;
+                    x = 0;
+                    y = 0;
+                    tileDataSCR[i][j].position = 0;
+                    tileDataSCR[i][j].flipH = false;
+                    tileDataSCR[i][j].flipV = false;
+                    
+                    //System.out.println("Max: " + last_tile + " - Position: " + position);
+                }
+                else{
+                    x = position % width_img;
+                    y = position / width_img;
+                }
 
                 //System.out.println("Position: " + position + " X: " + x + " Y: " + y);
 
-                TilePanel tp = new TilePanel(tilesBMfile[y][x], palettes.get(listPalettes.getSelectedIndex()), counter, zoom);
+                TilePanel tp = new TilePanel(tilesBMfile[y][x], palettes_mod.get(listPalettes.getSelectedIndex()), counter, zoom);
                 tp.addMouseListener(listenerSCR);
 
                 tp.setFlips(tileDataSCR[i][j].flipH, tileDataSCR[i][j].flipV);
@@ -1667,27 +2526,95 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         panelTilesSCR.setPreferredSize(new Dimension(newWidth, newHeight));
 
         scrollSCR.revalidate();
+        
+        if (!flag_out_of_bounds)
+            highlightTiles();
+        
+        if (flag_out_of_bounds && report){    // Display a message saying that some tiles have been set to the first one for being out of bounds
+            JOptionPane.showMessageDialog(null, "Some tiles were out of bounds and have been set to tile 0.",
+                "Warning", JOptionPane.WARNING_MESSAGE);
+        }
     }
 
 
     public void clearTilesSCR(){
         int pos = 0;
-
-        for (int i = 0; i < tileDataSCR.length; i++){
-            for (int j= 0; j < tileDataSCR[0].length; j++){
-                tileDataSCR[i][j].flipH = false;
-                tileDataSCR[i][j].flipV = false;
-                tileDataSCR[i][j].position = 0;
-
-                //((TilePanel) panelTilesSCR.getComponent(pos)).clearTile();
-                ((TilePanel) panelTilesSCR.getComponent(pos)).setTileImage(
-                        ((TilePanel) panelTilesIMG.getComponent(0)).getTileImage() );
-                ((TilePanel) panelTilesSCR.getComponent(pos)).setFlips(false, false);
-                pos++;
+        
+        // If no SCR is loaded, create one with the dimensions of the BM6 / BM9
+        if (tileDataSCR == null){
+            tileDataSCR = new TileDataSCR[tilesBMfile.length][];
+            for (int i = 0; i < tileDataSCR.length; i++){
+                tileDataSCR[i] = new TileDataSCR[tilesBMfile[0].length];
+                
+                for (int j = 0; j < tileDataSCR[0].length; j++)
+                    tileDataSCR[i][j] = new TileDataSCR();
             }
+            
+            
+            flipsAllowed = true;    // NEEDS REVISION - There are some cases in which flips are not allowed.
+                                    // This could be size-dependant, must investigate cases.
+            
+            // Fill the SCR panel with the indicated tiles taken from the image
+            displaySCR(false);
+
+            // Enable the rest of the SCR features
+            buttonSaveSCR.setEnabled(true);
+            buttonSCRtoBMP.setEnabled(true);
+            checkTransparencySCR.setEnabled(true);
+            checkXOpaddingSCR.setEnabled(true);
+            //buttonClear.setEnabled(true);
+            buttonResize.setEnabled(true);
+
+            checkFlipH.setEnabled(flipsAllowed);
+            checkFlipV.setEnabled(flipsAllowed);
+
+            labelWidth.setEnabled(true);
+            labelHeight.setEnabled(true);
+            textfieldWidth.setText("" + tileDataSCR[0].length);
+            textfieldWidth.setEnabled(true);
+            textfieldHeight.setText("" + tileDataSCR.length);
+            textfieldHeight.setEnabled(true);
+
+            // Set the first tile as selected
+            selectedSCR = 0;
+            TilePanel tp = (TilePanel) panelTilesSCR.getComponent(0);
+            tp.setSelected(true);
+            lastSCRclicked = tp;
+
+            checkFlipH.setSelected(tileDataSCR[0][0].flipH);
+            checkFlipV.setSelected(tileDataSCR[0][0].flipV);
+
+            scr_loaded = true;
+        }
+
+        else{
+            //System.out.println("Number of SCR tiles: " + panelTilesSCR.getComponentCount());
+            
+            if (panelTilesSCR.getComponentCount() == 0) // When creating a new SCR, the tiles could be empty. This generates the tiles
+                displaySCR(false);                           // The normal way to reproduce the error: load BM6, load SCR, load BM6, click on New / Load
+            
+            // Set all tiles to the top-left one (position 0)
+            for (int i = 0; i < tileDataSCR.length; i++){
+                for (int j= 0; j < tileDataSCR[0].length; j++){
+                    tileDataSCR[i][j].flipH = false;
+                    tileDataSCR[i][j].flipV = false;
+                    tileDataSCR[i][j].position = 0;
+                    
+                    //System.out.println("Accessing SCR tile: " + pos);
+                    
+                    //((TilePanel) panelTilesSCR.getComponent(pos)).clearTile();
+                    ((TilePanel) panelTilesSCR.getComponent(pos)).setTileImage(
+                            ((TilePanel) panelTilesIMG.getComponent(0)).getTileImage() );
+                    ((TilePanel) panelTilesSCR.getComponent(pos)).setFlips(false, false);
+                    pos++;
+                }
+            }
+
+            panelTilesSCR.repaint();
         }
         
-        panelTilesSCR.repaint();
+        //highlights = null;
+        highlightTiles();
     }
 
 
@@ -1700,13 +2627,30 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             int height = tileDataSCR.length;
 
             if (newWidth == width && newHeight == height){
-                System.out.println("Dimensions are the same. We don't resize.");
+                //System.out.println("Dimensions are the same. We don't resize.");
+                                
+                JOptionPane.showMessageDialog(null, "Dimensions are the same. We don't resize.",
+                "Warning", JOptionPane.WARNING_MESSAGE);
+                
                 return;
             }
 
             if (newWidth == 0 || newHeight == 0){
-                System.out.println("Having 0 rows / columns is not allowed.");
-                return;
+                //System.out.println("Having 0 rows / columns is not allowed.");
+                
+                JOptionPane.showMessageDialog(null, "Having 0 rows / columns is not allowed.",
+                "Warning", JOptionPane.WARNING_MESSAGE);
+                
+                if (newWidth == 0){
+                    textfieldWidth.setText("1");
+                    newWidth = 1;
+                }
+                
+                if (newHeight == 0){
+                    textfieldHeight.setText("1");
+                    newHeight = 1;
+                }
+                //return;
             }
 
             TileDataSCR[][] newTiles = new TileDataSCR[newHeight][];
@@ -1724,7 +2668,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
             tileDataSCR = newTiles;
             
-            displaySCR();
+            displaySCR(false);
 
             if (selectedSCR > panelTilesSCR.getComponentCount())
                 selectedSCR = 0;
@@ -1745,8 +2689,17 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
         int tilesX = tileDataSCR[0].length;
         int tilesY = tileDataSCR.length;
+        int alignXO = 0;
+        
+        if (!textfieldAlign.getText().isBlank())
+            alignXO = Integer.parseInt(textfieldAlign.getText());
 
         int num_tiles = tilesX * tilesY;
+        
+        int alignment = 32;
+        
+        if (checkXOpaddingSCR.isSelected())
+            alignment = 2048;
 
         // Prepare the header
         header[0] = 'S';
@@ -1766,12 +2719,17 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
         if (!flipsAllowed)
             header[15] = 1;
 
+        header[16] = (byte) ( (alignXO >> 24) & 0xff );
+        header[17] = (byte) ( (alignXO >> 16) & 0xff );
+        header[18] = (byte) ( (alignXO >> 8) & 0xff );
+        header[19] = (byte) ( alignXO & 0xff );
+        
         // Prepare the tile data
         int size = num_tiles * 2;   // 2 bytes per tile
-        int extra_bytes = size % 32;
+        int extra_bytes = size % alignment;
 
-        if (extra_bytes != 0)   // The tile data has to be 32-byte aligned
-            size += 32 - extra_bytes;
+        if (extra_bytes != 0)   // The tile data has to be 32-byte aligned or 2048-byte aligned in the case of XO files
+            size += alignment - extra_bytes - header.length;
 
         byte[] data = new byte[size];
 
@@ -1815,17 +2773,94 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
             scr.close();
 
-            System.out.println(path + " saved successfully.");
+            //System.out.println(path + " saved successfully.");
+            
+            JOptionPane.showMessageDialog(null, "File created:\n" + path,
+                "Success", JOptionPane.INFORMATION_MESSAGE);
+            
         } catch (IOException ex) {
             System.err.println("ERROR: Couldn't write " + path);
             Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
         }
 
     }
+    
+    
+    public void savePalette(String path){
+        IndexColorModel cm_mod = palettes_mod.get(lastPalette);
+        int pal_size = cm_mod.getMapSize();
+        
+        byte[] r = new byte[pal_size];
+        byte[] g = new byte[pal_size];
+        byte[] b = new byte[pal_size];
+        byte[] a = new byte[pal_size];
+
+        cm_mod.getReds(r);
+        cm_mod.getBlues(b);
+        cm_mod.getGreens(g);
+        cm_mod.getAlphas(a);
+                
+        // Prepare the header
+        byte[] header = new byte[32];
+        
+        header[0] = 'B';
+        header[1] = 'M';
+        header[2] = 'P';
+        
+        if (pal_size == 16){
+            header[3] = 0x07;
+            header[7] = 0x10;
+        }
+        else{
+            header[3] = 0x0a;
+            header[6] = 0x01;
+        }
+        
+        // Prepare color data
+        byte[] data = new byte[pal_size*4];
+        
+        int counter = 0;
+        
+        for (int i = 0; i < data.length; i+=4){
+            data[i] = r[counter];
+            data[i+1] = g[counter];
+            data[i+2] = b[counter];
+            data[i+3] = a[counter];
+            
+            counter++;
+        }        
+        
+        // Prepare padding
+        byte[] padding = new byte[2048 - header.length - data.length];
+        
+        
+        try {
+            RandomAccessFile pal = new RandomAccessFile(path, "rw");
+            
+            // Truncate the file (in case we're overwriting)
+            pal.setLength(0);
+
+            pal.write(header);
+            pal.write(data);
+            if (checkXOpaddingPalette.isSelected())
+                pal.write(padding);
+
+            pal.close();
+
+            //System.out.println(path + " saved successfully.");
+            
+            JOptionPane.showMessageDialog(null, "File created:\n" + path,
+                "Success", JOptionPane.INFORMATION_MESSAGE);
+            
+        } catch (IOException ex) {
+            System.err.println("ERROR: Couldn't write " + path);
+            Logger.getLogger(Main.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
 
 
-    public void saveBMP(String path){
-        byte[] CLUT = getCLUT();
+    public void saveBMP(String path, boolean alt_transparency){
+        byte[] CLUT = getCLUT(alt_transparency);
         byte[] imageData = getImageData(tilesBMfile);
         int width = tilesBMfile[0].length * 8; // Each tile is 8 pixels wide
         int height = tilesBMfile.length * 8;   // and 8 pixels high
@@ -1837,7 +2872,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     }
 
 
-    public void saveSCRtoBMP(String path){
+    public void saveSCRtoBMP(String path, boolean alt_transparency){
         int width = tileDataSCR[0].length * 8; // Each tile is 8 pixels wide
         int height = tileDataSCR.length * 8;   // and 8 pixels high
 
@@ -1875,7 +2910,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             }
         }
 
-        byte[] CLUT = getCLUT();
+        byte[] CLUT = getCLUT(alt_transparency);
         byte[] imageData = getImageData(selectedTiles);
         byte depth = 0x04;  // 4bpp
         if (!buttonImportBM7.isEnabled())
@@ -1932,7 +2967,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
 
     // Returns the selected palette as a byte array
-    public byte[] getCLUT(){
+    public byte[] getCLUT(boolean transparency){
         int clut_size = 64;
         if (!buttonImportBM7.isEnabled())
             clut_size = 1024;
@@ -1946,10 +2981,10 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
         int sel = listPalettes.getSelectedIndex();
 
-        palettes.get(sel).getReds(r);
-        palettes.get(sel).getGreens(g);
-        palettes.get(sel).getBlues(b);
-        palettes.get(sel).getAlphas(a);
+        palettes_mod.get(sel).getReds(r);
+        palettes_mod.get(sel).getGreens(g);
+        palettes_mod.get(sel).getBlues(b);
+        palettes_mod.get(sel).getAlphas(a);
 
         int counter = 0;
 
@@ -1962,6 +2997,17 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             //System.out.println("R: " + r[counter] + " G: " + g[counter] + " B: " + b[counter] + " A: " + a[counter]);
 
             counter++;
+        }
+        
+        // If we choose to use alternate transparency colour, we'll set the first colour
+        // in the palette to violet, a colour very unlikely to be used in the game files.
+        // We do this in order to avoid indexed images that only use gray to be
+        // recognized as images in grayscale format -> leads to trouble editing them.
+        if (transparency){
+            clut[0] = (byte) 224;
+            clut[1] = (byte) 64;
+            clut[2] = (byte) 240;
+            
         }
 
         return clut;
@@ -2142,6 +3188,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
             //System.out.println(file_path + " saved successfully.");
             System.out.println(filename + " saved successfully.");
             //tex_counter++;
+            
         } catch (IOException ex) {
             //System.err.println("ERROR: Couldn't write " + file_path);
             System.err.println("ERROR: Couldn't write " + filename);
@@ -2150,9 +3197,201 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
 
     }
 
+    
+    // Takes all BM6 / BM9 files in a directory and exports them to BMP files, as well as the SCR files associated to them
+    // type determines if we're looking for BM6 or BM9 files
+    public void batchExportBMP(String directory, int type){
+        // Get a list of all BM6 / BM9 files in the folder
+        System.out.println("Folder: " + directory);
+        File bmpFolder = new File(directory);
+        
+        File[] listOfFiles;
+        
+        if (type == 6)
+            listOfFiles = bmpFolder.listFiles(new FilenameFilter(){
+            public boolean accept(File dir, String filename) {
+                return (filename.endsWith(".BM6")); }
+            });
+        else
+            listOfFiles = bmpFolder.listFiles(new FilenameFilter(){
+            public boolean accept(File dir, String filename) {
+                return (filename.endsWith(".BM9")); }
+            });
+            
+        
+        System.out.println("BMx files found: " + listOfFiles.length);
+        
+        
+        int write_counter = 0;
+        
+        // For each file found.
+        for (int i = 0; i < listOfFiles.length; i++){
+            // Load the file using function openBMfile
+            // This loads the palettes as well
+            openBMfile(listOfFiles[i].getAbsolutePath(), type);
+        
+            // Save the BM file as BMP (use function saveBMP)
+            // This can be done for the first palette or one for each
+            if (checkmenuAllPalettes.isSelected()){
+                for (int j = 0; j < palettes.size(); j++){
+                    listPalettes.setSelectedIndex(j);
+                    selectPalette();
+                    saveBMP(listOfFiles[i].getAbsolutePath() + "-" + j + ".bmp", checkTransparencyBM.isSelected());
+                    write_counter++;
+                }
+            }
+            else{
+                saveBMP(listOfFiles[i].getAbsolutePath() + ".bmp", checkTransparencyBM.isSelected());
+                write_counter++;
+            }
+        
+            // We determine if we have to skip the palettes to start looking for SCR
+            // files or not
+            String filename;
+            
+            if (palette_after && !lastPaletteFound.isEmpty())
+                filename = lastPaletteFound;
+            else
+                filename = listOfFiles[i].getAbsolutePath();
+            
+            // Get the folder and the name of the BM6 we're loading palettes for
+            int pos = filename.lastIndexOf('/');
+            if (pos < 0)
+                pos = filename.lastIndexOf('\\');
+            
+            //System.out.println("Filename: " + filename + " - Length: " + filename.length() );
+            
+            String folder = filename.substring(0, pos + 1);
+            String name = filename.substring(pos + 1, pos + 5); // We take the number of the file
+            
+            int number = Integer.parseInt(name);
+            String new_name = "";
+
+            //System.out.println("Number: " + number);
+            boolean go_on = true;
+            int counter = 1;
+            File f;
+            
+            boolean flag_stop = false;
+            
+            // While there are SCR files following the BM6 / BM9 file (or its palettes)
+            while (go_on && !flag_stop){
+                new_name = getSCRname(number + counter);
+
+                f = new File(folder + new_name);
+
+                if (!f.exists()){
+                    // Normally, this means to stop.
+                    // However, there's a special case with mission numbers:
+                    // SCR files are spaced with a distance of 3 (2715, 2718, 2721, ...)
+                    // We make sure we're not in that case
+                    new_name = getSCRname(number + counter + 2);
+                    f = new File(folder + new_name);
+                    
+                    if (!f.exists())
+                        go_on = false;
+                    else{
+                        counter += 2;
+                        flag_stop = true;   // We only do this once
+                    }
+                }                
+                else{
+                    // Load the file using function openSCR
+                    openSCR(folder + new_name, false);
+                    counter++;
+
+                    // Save the SCR file to BMP (use function saveSCRtoBMP)
+                    // This can be done for the first palette or one for each
+                    if (checkmenuAllPalettes.isSelected()){
+                        for (int j = 0; j < palettes.size(); j++){
+                            listPalettes.setSelectedIndex(j);
+                            selectPalette();
+                            saveSCRtoBMP(folder + new_name + "-" + j + ".bmp", checkTransparencySCR.isSelected());
+                            write_counter++;
+                        }
+                    }
+                    else{
+                        saveSCRtoBMP(folder + new_name + ".bmp", checkTransparencySCR.isSelected());
+                        write_counter++;
+                    }
+                }
+            }
+        }
+            
+        JOptionPane.showMessageDialog(null, "Batch finished.\nProcessed " + write_counter + " files.",
+            "Finished", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    
+    // Highlights tiles in use in the SCR
+    public void highlightTiles(){
+        if (highlights != null){
+            for (int i = 0; i < highlights.length; i++){
+                try{
+                TilePanel tp = (TilePanel) panelTilesIMG.getComponent(highlights[i]);
+                tp.setHighlighted(false);
+                } catch(ArrayIndexOutOfBoundsException ex){
+                    System.out.println("Tried to highlight unexistant tile: " + highlights[i]);
+                    System.out.println("Position in highlight list: " + i);
+                }
+            }
+        }
+        
+        if (tileDataSCR != null){
+            highlights = new int[tileDataSCR.length * tileDataSCR[0].length];
+            int counter = 0;
+
+            for (int i = 0; i < tileDataSCR.length; i++)
+                for (int j = 0; j < tileDataSCR[0].length; j++){
+
+                    TilePanel tp = (TilePanel) panelTilesIMG.getComponent(tileDataSCR[i][j].position);
+                    tp.setHighlighted(true);
+
+                    highlights[counter] = tileDataSCR[i][j].position;
+                    counter++;
+                }
+        }
+    }
+    
+    
+    public void batchExportSCR(String directory){
+        // Get a list of all SCRs files in the folder
+        System.out.println("Folder: " + directory);
+        File bmpFolder = new File(directory);
+        
+        File[] listOfFiles;
+        
+        listOfFiles = bmpFolder.listFiles(new FilenameFilter(){
+        public boolean accept(File dir, String filename) {
+            return (filename.endsWith(".SCR")); }
+        });
+            
+        
+        System.out.println("SCR files found: " + listOfFiles.length);
+        
+        
+        int write_counter = 0;
+        
+        // For each file found.
+        for (int i = 0; i < listOfFiles.length; i++){
+            // Load the file using function openSCR
+            openSCR(listOfFiles[i].getAbsolutePath(), false);
+
+            // Save the SCR file to BMP (use function saveSCRtoBMP)
+            // This can be done for the first palette or one for each
+            saveSCRtoBMP(listOfFiles[i].getAbsolutePath() + ".bmp", checkTransparencySCR.isSelected());
+
+            write_counter++;
+            
+        }
+            
+        JOptionPane.showMessageDialog(null, "Batch finished.\nProcessed " + write_counter + " files.",
+            "Finished", JOptionPane.INFORMATION_MESSAGE);
+    }
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton buttonClear;
+    private javax.swing.JButton buttonExportPalette;
     private javax.swing.ButtonGroup buttonGroupTiles;
     private javax.swing.JButton buttonImportBM10;
     private javax.swing.JButton buttonImportBM7;
@@ -2160,14 +3399,35 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     private javax.swing.JButton buttonLoadBM9;
     private javax.swing.JButton buttonLoadSCR;
     private javax.swing.JButton buttonResize;
+    private javax.swing.JButton buttonRestoreAllColors;
+    private javax.swing.JButton buttonRestoreColor;
     private javax.swing.JButton buttonSCRtoBMP;
     private javax.swing.JButton buttonSaveBMP;
     private javax.swing.JButton buttonSaveSCR;
     private javax.swing.JCheckBox checkClearOnLoad;
     private javax.swing.JCheckBox checkFlipH;
     private javax.swing.JCheckBox checkFlipV;
+    private javax.swing.JCheckBox checkTransparencyBM;
+    private javax.swing.JCheckBox checkTransparencySCR;
+    private javax.swing.JCheckBox checkXOpaddingPalette;
+    private javax.swing.JCheckBox checkXOpaddingSCR;
+    private javax.swing.JCheckBoxMenuItem checkmenuAllPalettes;
+    private javax.swing.JComboBox<String> comboColor;
     private javax.swing.JComboBox comboZoomImage;
     private javax.swing.JComboBox comboZoomSCR;
+    private javax.swing.JTextField fieldColorA;
+    private javax.swing.JTextField fieldColorB;
+    private javax.swing.JTextField fieldColorG;
+    private javax.swing.JTextField fieldColorR;
+    private javax.swing.JPopupMenu.Separator jSeparator1;
+    private javax.swing.JPopupMenu.Separator jSeparator2;
+    private javax.swing.JLabel labelAlign;
+    private javax.swing.JLabel labelColorA;
+    private javax.swing.JLabel labelColorB;
+    private javax.swing.JLabel labelColorG;
+    private javax.swing.JLabel labelColorNmbr;
+    private javax.swing.JLabel labelColorR;
+    private javax.swing.JLabel labelDimensions;
     private javax.swing.JLabel labelHeight;
     private javax.swing.JLabel labelPalettes;
     private javax.swing.JLabel labelSCRfile;
@@ -2175,7 +3435,13 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     private javax.swing.JLabel labelZoomImage;
     private javax.swing.JLabel labelZoomSCR;
     private javax.swing.JList listPalettes;
+    private javax.swing.JMenu menuBatch;
+    private javax.swing.JMenuItem menuItemSCRFolderToBMP;
+    private javax.swing.JMenuBar menubarMain;
+    private javax.swing.JMenuItem menuitemBM6FolderToBMP;
+    private javax.swing.JMenuItem menuitemBM9FolderToBMP;
     private javax.swing.JPanel panelColours;
+    private javax.swing.JPanel panelEditPalette;
     private javax.swing.JPanel panelImageData;
     private javax.swing.JPanel panelPalettes;
     private javax.swing.JPanel panelSCRedit;
@@ -2186,6 +3452,7 @@ public class UserInterfaceSCR extends javax.swing.JFrame {
     private javax.swing.JScrollPane scrollImage;
     private javax.swing.JScrollPane scrollPalettes;
     private javax.swing.JScrollPane scrollSCR;
+    private javax.swing.JTextField textfieldAlign;
     private javax.swing.JTextField textfieldHeight;
     private javax.swing.JTextField textfieldWidth;
     // End of variables declaration//GEN-END:variables
